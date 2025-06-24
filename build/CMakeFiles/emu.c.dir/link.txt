@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/emu.c.dir/chip8.c.o -o emu.c 

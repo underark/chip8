@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/emulator.dir/emu.c.o CMakeFiles/emulator.dir/chip8.c.o CMakeFiles/emulator.dir/display.c.o -o bin/emulator  /usr/lib/x86_64-linux-gnu/libSDL2.so 

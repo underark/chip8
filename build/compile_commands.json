@@ -1,0 +1,20 @@
+[
+{
+  "directory": "/home/alex/projects/emulator/build",
+  "command": "/usr/bin/cc  -I/home/alex/projects/emulator/headers -isystem /usr/include/SDL2 -g -std=gnu11 -D_REENTRANT -o CMakeFiles/emulator.dir/emu.c.o -c /home/alex/projects/emulator/emu.c",
+  "file": "/home/alex/projects/emulator/emu.c",
+  "output": "CMakeFiles/emulator.dir/emu.c.o"
+},
+{
+  "directory": "/home/alex/projects/emulator/build",
+  "command": "/usr/bin/cc  -I/home/alex/projects/emulator/headers -isystem /usr/include/SDL2 -g -std=gnu11 -D_REENTRANT -o CMakeFiles/emulator.dir/chip8.c.o -c /home/alex/projects/emulator/chip8.c",
+  "file": "/home/alex/projects/emulator/chip8.c",
+  "output": "CMakeFiles/emulator.dir/chip8.c.o"
+},
+{
+  "directory": "/home/alex/projects/emulator/build",
+  "command": "/usr/bin/cc  -I/home/alex/projects/emulator/headers -isystem /usr/include/SDL2 -g -std=gnu11 -D_REENTRANT -o CMakeFiles/emulator.dir/display.c.o -c /home/alex/projects/emulator/display.c",
+  "file": "/home/alex/projects/emulator/display.c",
+  "output": "CMakeFiles/emulator.dir/display.c.o"
+}
+]
