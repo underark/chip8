@@ -22,6 +22,7 @@ struct Chip8 {
     uint16_t sp;
     uint8_t key[REGISTER_SIZE];
     bool waiting;
+    bool draw;
 };
 
 struct SDLPack {

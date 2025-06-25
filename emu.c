@@ -29,8 +29,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    emulator->pc = 0x200;
-    uint32_t cpu_tick, timer_tick = SDL_GetTicks();
     SDL_Event e;
     bool running = true;
     while (running) {
@@ -39,14 +37,18 @@ int main(int argc, char* argv[]) {
                 running = false;
             } else if (e.type == SDL_KEYDOWN) {
                 int k = to_key(e.key.keysym.sym);
-                emulator->key[k] = 1;
+                if (k >= 0) {
+                    emulator->key[k] = 1;
+                }
             } else if (e.type == SDL_KEYUP) {
                 int k = to_key(e.key.keysym.sym);
-                emulator->key[k] = 0;
-                if (emulator->waiting) {
+                if (k >= 0 && emulator->waiting) {
+                    emulator->key[k] = 0;
                     emulator->V[(emulator->wait_register & 0x0F00) >> 8] = k;
                     emulator->waiting = false;
-                };
+                } else if (k >= 0) {
+                    emulator->key[k] = 0;
+                }
             }
         }
 
@@ -59,10 +61,16 @@ int main(int argc, char* argv[]) {
         }
 
         if (!emulator->waiting) {
-            for (int i = 0; i < 11; i++) {
+            for (int i = 0; i < 33; i++) {
+                emulator->draw = false;
                 printf("opcode is %x\n", emulator->opcode);
                 emulator->opcode = emulator->memory[emulator->pc] << 8 | emulator->memory[emulator->pc + 1];
+                emulator->pc += 2;
                 decode_execute(emulator->opcode, emulator, SDLPack);
+                update_display(emulator, SDLPack);
+                if (emulator->waiting || emulator->draw) {
+                    break;
+                }
             }
         }
         SDL_Delay(16);
