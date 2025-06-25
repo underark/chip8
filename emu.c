@@ -64,9 +64,20 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < 33; i++) {
                 emulator->draw = false;
                 printf("opcode is %x\n", emulator->opcode);
+                if (emulator->pc >= MEMORY_SIZE) {
+                    printf("Invalid memory size");
+                    return 1;
+                }
                 emulator->opcode = emulator->memory[emulator->pc] << 8 | emulator->memory[emulator->pc + 1];
                 emulator->pc += 2;
-                decode_execute(emulator->opcode, emulator, SDLPack);
+                if (emulator->pc >= MEMORY_SIZE) {
+                    printf("Invalid memory size");
+                    return 1;
+                }
+                bool b = decode_execute(emulator->opcode, emulator, SDLPack);
+                if (!b) {
+                    return 1;
+                }
                 update_display(emulator, SDLPack);
                 if (emulator->waiting || emulator->draw) {
                     break;

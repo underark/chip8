@@ -64,6 +64,10 @@ bool read_to_memory(char* filename, struct Chip8* emulator) {
     uint8_t buffer;
     int c = 0x200;
     while (fread(&buffer, sizeof(uint8_t), 1, rom) > 0) {
+        if (c >= MEMORY_SIZE) {
+            printf("Rom too big\n");
+            return false;
+        }
         emulator->memory[c] = buffer;
         c++;
     }
@@ -71,7 +75,7 @@ bool read_to_memory(char* filename, struct Chip8* emulator) {
     return true;
 }
 
-void decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPack) {
+bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPack) {
     uint16_t nnn = code & 0x0FFF;
     uint8_t vx = emulator->V[(code & 0x0F00) >> 8];
     uint8_t vy = emulator->V[(code & 0x00F0) >> 4];
@@ -198,6 +202,14 @@ void decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
             for (int r = 0; r < n && y + r < 32; r++){
                 for (int c = 0; c < 8 && x + c < 64; c++) {
                     int loc = (y + r) * 64 + (x + c);
+                    if (!is_in_bounds(emulator->I + r, MEMORY_SIZE)) {
+                        printf("Invalid memory access: I");
+                        return false;
+                    } else if (!is_in_bounds(loc, DISPLAY_SIZE)) {
+                        printf("Invalid memory access: display");
+                        return false;
+                    }
+                    
                     uint8_t row_b = emulator->memory[emulator->I + r];
                     uint8_t b = (row_b >> (7 - c)) & 1;
                     
@@ -229,13 +241,22 @@ void decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                     uint8_t h = vx / 100;
                     uint8_t t = (vx % 100) / 10;
                     uint8_t d = vx % 10;
+                    if (!is_in_bounds(emulator->I + 2, MEMORY_SIZE)) {
+                        printf("Invalid memory location: I");
+                        return false;
+                    }
                     emulator->memory[emulator->I] = h;
                     emulator->memory[emulator->I + 1] = t;
                     emulator->memory[emulator->I + 2] = d;
                     break;
                 case 0x0055:
                     uint8_t l = (code & 0x0F00) >> 8;
+
                     for (int i = 0; i <= l; i++) {
+                        if (!is_in_bounds(emulator->I, MEMORY_SIZE)) {
+                            printf("Invalid memory location: I");
+                            return false;
+                        }
                         emulator->memory[emulator->I] = emulator->V[i];
                         emulator->I++;
                     }
@@ -243,6 +264,10 @@ void decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                 case 0x0065:
                     l = (code & 0x0F00) >> 8;
                     for (int i = 0; i <= l; i++) {
+                        if (!is_in_bounds(emulator->I, MEMORY_SIZE)) {
+                            printf("Invalid memory location: I");
+                            return false;
+                        }
                         emulator->V[i] = emulator->memory[emulator->I];
                         emulator->I++;
                     }
@@ -297,5 +322,13 @@ int to_key(SDL_KeyCode key) {
         case SDLK_v: return 0xF;
     }
     return -1;
+}
+
+// v1 is value to be checked; v2 is expected value upper limit
+bool is_in_bounds(int v1, int v2) {
+    if (v1 >= v2) {
+        return false;
+    }
+    return true;
 }
 
