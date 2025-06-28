@@ -14,7 +14,7 @@ bool setup(struct SDLPack* SDLPack) {
         printf("SDL failed");
         return false;
     }
-    SDLPack->texture = SDL_CreateTexture(SDLPack->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 64, 32);
+    SDLPack->texture = SDL_CreateTexture(SDLPack->renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, 128, 64);
     if (!SDLPack->texture) {
         printf("SDL failed");
         return false;
@@ -23,11 +23,12 @@ bool setup(struct SDLPack* SDLPack) {
 }
 
 void update_display(struct Chip8* emulator, struct SDLPack* SDLPack) {
-    SDL_Rect scale = {0, 0, 64 * 10, 32 * 10};
+    SDL_Rect scale = {0, 0, 128 * 5, 64 * 5};
     uint32_t buffer[DISPLAY_SIZE];
     to_pixels(emulator->display, buffer);
-    SDL_UpdateTexture(SDLPack->texture, NULL, buffer, 64 * sizeof(uint32_t));
+    SDL_UpdateTexture(SDLPack->texture, NULL, buffer, 128 * sizeof(uint32_t));
     SDL_RenderClear(SDLPack->renderer);
+    SDL_SetTextureScaleMode(SDLPack->texture, SDL_ScaleModeNearest);
     SDL_RenderCopy(SDLPack->renderer, SDLPack->texture, NULL, &scale);
     SDL_RenderPresent(SDLPack->renderer);
 }

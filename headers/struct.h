@@ -5,12 +5,14 @@
 #include <SDL2/SDL.h>
 
 #define MEMORY_SIZE 4096
-#define DISPLAY_SIZE (64 * 32)
+#define DISPLAY_SIZE (128 * 64)
 #define REGISTER_SIZE 16
 
 struct Chip8 {
     uint8_t memory[MEMORY_SIZE];
     uint8_t V[REGISTER_SIZE];
+    // Consider moving flags register to separate file to mimick original behaviour
+    uint8_t flags[REGISTER_SIZE];
     uint8_t display[DISPLAY_SIZE];
     uint16_t opcode;
     uint16_t wait_register;
@@ -21,8 +23,11 @@ struct Chip8 {
     uint16_t stack[REGISTER_SIZE];
     uint16_t sp;
     uint8_t key[REGISTER_SIZE];
+    bool running;
     bool waiting;
     bool draw;
+    bool schip;
+    bool hires;
 };
 
 struct SDLPack {
