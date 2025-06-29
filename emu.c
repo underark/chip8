@@ -94,6 +94,7 @@ int main(int argc, char* argv[]) {
         SDL_Delay(16);
     }
     free(emulator);
+    free(SDLPack);
     SDL_DestroyWindow(SDLPack->window);
     SDL_Quit();
     return 0;
