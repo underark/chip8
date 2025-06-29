@@ -115,15 +115,16 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
     switch (code & 0xF000) {
         case 0x0000:
             switch (code & 0x0FFF) {
+                // 00E0 clears display
                 case 0x00E0:
-                    for (int i = 0; i < DISPLAY_SIZE; i++) {
-                        emulator->display[i] = 0;
-                    }
+                    clear_display(emulator->display);
                     break;
+                // 00EE RET from subroutine
                 case 0x00EE:
                     emulator->sp--;
                     emulator->pc = emulator->stack[emulator->sp];
                     break;
+                // 00FB Shifts display to the right four pixels (2 in lores mode)
                 case 0x00FB:
                     for (int r = 0; r < 64; r++) {
                         for (int c = 127; c >= 0; c--) {
@@ -134,34 +135,44 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                         }
                     }
                     break;
+                // 00FC shifts display four to the left (2 in lores)
                 case 0x00FC:
                     for (int r = 0; r < 64; r++) {
-                        for (int c = 0; c < 128; c++) {
+                        for (int c = 0; c + 4 < 128; c++) {
                             int pos = r * 128 + c;
-                            if (emulator->hires && c + 4 < 128) {
-                                emulator->display[pos] = emulator->display[pos + 4];
-                            } else if (c + 2 < 128) {
-                                emulator->display[pos] = emulator->display[pos + 2];
-                            }
+                            emulator->display[pos] = emulator->display[pos + 4];
                         }
                     }
+                // Instantly causes the interpreter to stop running; probably isn't desirable
                 case 0x00FD:
                     //emulator->running = false;
                     break;
+                // 00FE Disables hires mode in SCHIP
                 case 0x00FE:
                     emulator->hires = false;
                     break;
+                // 00FF Enables hires mode in SCHIP
                 case 0x00FF:
                     emulator->hires = true;
                     break;
+                // 00CN Shifts display down by N (N/2 in lores)
+                // 00C0 is technically not a valid opcode
                 default:
-
+                    for (int r = 63; r - n >= 0; r--) {
+                        for (int c = 127; c >= 0; c--) {
+                            int pos = r * 128 + c;
+                            emulator->display[pos] = emulator->display[pos - 128 * n];
+                            emulator->display[pos - 128 * n] = 0;
+                        }
+                    }
                     break;
             }
             break;
+        // 1NNN Jump to NNN
         case 0x1000:
             emulator->pc = nnn;
             break;
+        /// 2NNN Enter subroutine at NNN and store RET address on the stack
         case 0x2000:
             emulator->stack[emulator->sp] = emulator->pc;
             if (emulator->sp < 15) {
@@ -169,44 +180,54 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
             }
             emulator->pc = nnn;
             break;
+        // 3XNN skip next opcode if vX == NN
         case 0x3000:
             if (vx == nn) {
                 emulator->pc += 2;
             }
             break;
+        // 4XNN skip next opcode if vX != NN
         case 0x4000:
             if (vx != nn) {
                 emulator->pc += 2;
             }
             break;
+        // 5XY0 skip next opcode if vX == vY
         case 0x5000:
             if (vx == vy) {
                 emulator->pc += 2;
             }
             break;
+        // 6XNN set vX to NN
         case 0x6000:
             emulator->V[(code & 0x0F00) >> 8] = nn;
             break;
+        // 7XNN add NN to vX
         case 0x7000:
             emulator->V[(code & 0x0F00) >> 8] += nn;
             break;
         case 0x8000:
             switch (code & 0x000F) {
+                // 8XY0 set vX to the value of vY
                 case 0:
                     emulator->V[(code & 0x0F00) >> 8] = vy;
                     break;
+                // 8XY1 set vX to the result of bitwise vX OR vY - original chip8 also resets VF
                 case 1:
                     emulator->V[(code & 0x0F00) >> 8] |= vy;
-                    emulator->V[0xF] = 0;
+                    if (!emulator->schip) emulator->V[0xF] = 0;
                     break;
+                // 8XY2 set vX to the result of bitwise vX AND vY - see above
                 case 2:
                     emulator->V[(code & 0x0F00) >> 8] &= vy;
-                    emulator->V[0xF] = 0;
+                    if (!emulator->schip) emulator->V[0xF] = 0;
                     break;
+                // 8XY3 set vX to the result of bitwise vX XOR vY
                 case 3:
                     emulator->V[(code & 0x0F00) >> 8] ^= vy;
-                    emulator->V[0xF] = 0;
+                    if (!emulator->schip) emulator->V[0xF] = 0;
                     break;
+                // 8XY4 add vY to vX, vF is set to 1 if an overflow happened, to 0 if not, even if X=F!
                 case 4:
                     emulator->V[(code & 0x0F00) >> 8] += vy;
                     if (vx + vy > 255) {
@@ -215,6 +236,7 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                         emulator->V[0xF] = 0;
                     }
                     break;
+                // 8XY5 subtract vY from vX, vF is set to 0 if an underflow happened, to 1 if not, even if X=F!
                 case 5:
                     emulator->V[(code & 0x0F00) >> 8] -= vy;
                     if (vx >= vy) {
@@ -223,11 +245,22 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                         emulator->V[0xF] = 0;
                     }
                     break;
+                // 8XY6 set vX to vY and shift vX one bit to the right, set vF to the bit shifted out, even if X=F! 
+                // SCHIP doesn't set vX to vY - shifts vX itself
                 case 6:
-                    emulator->V[(code & 0x0F00) >> 8] = vy;
-                    emulator->V[(code & 0x0F00) >> 8] >>= 1;
-                    emulator->V[0xF] = vy & 1;
+                    switch (emulator->schip) {
+                        case true:
+                            emulator->V[(code & 0x0F00) >> 8] >>= 1;
+                            emulator->V[0xF] = vx & 1;
+                            break;
+                        case false:
+                            emulator->V[(code & 0x0F00) >> 8] = vy;
+                            emulator->V[(code & 0x0F00) >> 8] >>= 1;
+                            emulator->V[0xF] = vy & 1;
+                            break;
+                    }
                     break;
+                // 8XY7 set vX to the result of subtracting vX from vY, vF is set to 0 if an underflow happened, to 1 if not, even if X=F!
                 case 7:
                     emulator->V[(code & 0x0F00) >> 8] = vy - vx;
                     if (vy >= vx) {
@@ -236,63 +269,115 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                         emulator->V[0xF] = 0;
                     }
                     break;
+                // 8XYE set vX to vY and shift vX one bit to the left, set vF to the bit shifted out, even if X=F!
+                // SCHIP shifts in place - original chip sets to vY first
                 case 0xE:
-                    emulator->V[(code & 0x0F00) >> 8] = vy;
-                    emulator->V[(code & 0x0F00) >> 8] <<= 1;
-                    emulator->V[0xF] = (vy & 0b10000000) >> 7;
+                    switch (emulator->schip) {
+                        case true:
+                            emulator->V[(code & 0x0F00) >> 8] <<= 1;
+                            emulator->V[0xF] = (vx & 0b10000000) >> 7;
+                            break;
+                        case false:
+                            emulator->V[(code & 0x0F00) >> 8] = vy;
+                            emulator->V[(code & 0x0F00) >> 8] <<= 1;
+                            emulator->V[0xF] = (vy & 0b10000000) >> 7;
+                            break;
+                    }
                     break;
             }
             break;
+        // 9XY0 skip next opcode if vX != vY
         case 0x9000:
             if (vx != vy) {
                 emulator->pc += 2;
             }
             break;
+        // ANNN set I to NNN
         case 0xA000:
             emulator->I = nnn;
             break;
+        // BNNN jump to address XNN + vX
+        // Original chip8 sets to NNN + v0; SCHIP is NNN + vX. This isn't documented widely as a quirk
         case 0xB000:
-            emulator->pc = nnn + emulator->V[0];
+            switch (emulator->schip) {
+                case true:
+                    emulator->pc = nnn + vx;
+                    break;
+                case false:
+                    emulator->pc = nnn + emulator->V[0];
+                    break;
+            }
             break;
+        // CXNN set vx to a random value masked (bitwise AND) with NN
         case 0xC000:
             int r = rand() % 255 + 1;
             emulator->V[(code & 0x0F00) >> 8] = r & nn;
             break;
         case 0xD000:
             switch (code & 0x000F) {
+                // DXY0 draw 16x16 pixel sprite at position vX, vY with data starting at the address in I, I is not changed 
                 case 0:
-                    emulator->V[0xF] = 0;
-                    for (int r = 0; r < 16 && y + r < 64; r++) {
-                        for (int c = 0; c < 16 && x + c < 128; c++) {
-                            int loc = (y + r) * 128 + (x + c);
-                            uint16_t row_b = emulator->memory[emulator->I + r] << 8 | emulator->memory[emulator->I + r + 1];
-                            uint16_t b = (row_b >> (15 - c)) & 1;
-                            
-                            if (emulator->display[loc] == 1) {
-                                emulator->V[0xF] = 1;
+                    switch (emulator->hires) {
+                        case true:
+                            emulator->V[0xF] = 0;
+                            for (int r = 0; r < 16 && y + r < 64; r++) {
+                                for (int c = 0; c < 16 && x + c < 128; c++) {
+                                    int loc = (y + r) * 128 + (x + c);
+                                    uint16_t row_b = emulator->memory[emulator->I + r] << 8 | emulator->memory[emulator->I + r + 1];
+                                    uint16_t b = (row_b >> (15 - c)) & 1;
+                                    
+                                    if (emulator->display[loc] == 1) {
+                                        emulator->V[0xF] = 1;
+                                    }
+                                    emulator->display[loc] ^= b;
+                                }
                             }
-                            emulator->display[loc] ^= b;
-                        }
+                            break;
+                        // 16x8 sprite in lores. This may be incorrect.
+                        case false:
+                            emulator->V[0xF] = 0;
+                            for (int r = 0; r < 8 && y + r < 64; r++) {
+                                for (int c = 0; c < 16 && x + c < 128; c++) {
+                                    int loc = (y + r) * 128 + (x + c);
+                                    uint16_t row_b = emulator->memory[emulator->I + r] << 8 | emulator->memory[emulator->I + r + 1];
+                                    uint16_t b = (row_b >> (15 - c)) & 1;
+                                    
+                                    if (emulator->display[loc] == 1) {
+                                        emulator->V[0xF] = 1;
+                                    }
+                                    emulator->display[loc] ^= b;
+                                }
+                            }
+                            break;
                     }    
                     break;
+                // DXYN draw 8xN pixel sprite at position vX, vY with data starting at the address in I, I is not changed
                 default:
                     switch (emulator->hires) {
+                        // Starting position always wraps; pixels outside of display are cut
+                        // hires mode draws to the screen on a 1:1 pixel ratio (128x64 display)
+                        // in SCHIP, vF is set to rows with collisions + rows cut off at bottom of screen
                         case true:
                             x = vx % 128;
                             y = vy % 64;
                             emulator->V[0xF] = 0;
                             for (int r = 0; r < n && y + r < 64; r++) {
+                                bool collision = false;
                                 for (int c = 0; c < 8 && x + c < 128; c++) {
-                                    int loc = (y +r) * 128 + (x + c);
+                                    int loc = (y + r) * 128 + (x + c);
 
                                     row_b = emulator->memory[emulator->I + r];
                                     b = (row_b >> (7 - c)) & 1;
 
-                                    emulator->V[0xF] = emulator->display[loc] & b;
+                                    if (emulator->display[loc] & b == 1) collision = true;
                                     emulator->display[loc] ^= b;
                                 }
+                                if (collision) emulator->V[0xF] += 1;
+                                collision = false;
                             }
+                            if (y + n > 64) emulator->V[0xF] += y + n - 64;
                             break;
+                        // lores mode draws scaled up as the original hardware does (1 pixel is 2x2 block)
                         case false:
                             x = vx % 64;
                             y = vy % 32;
@@ -305,29 +390,30 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                                     row_b = emulator->memory[emulator->I + r];
                                     b = (row_b >> (7 - c)) & 1;
                                     
-
-                                    emulator->V[0xF] = emulator->display[loc1] & b;
+                                    if (emulator->V[0xF] == 0) emulator->V[0xF] = emulator->display[loc1] & b;
                                     emulator->display[loc1] ^= b;
-                                    emulator->V[0xF] = emulator->display[loc1 + 1] & b;
+                                    if (emulator->V[0xF] == 0) emulator->V[0xF] = emulator->display[loc1 + 1] & b;
                                     emulator->display[loc1 + 1] ^= b;
-                                    emulator->V[0xF] = emulator->display[loc2] & b;
+                                    if (emulator->V[0xF] == 0) emulator->V[0xF] = emulator->display[loc2] & b;
                                     emulator->display[loc2] ^= b;
-                                    emulator->V[0xF] = emulator->display[loc2 + 1] & b;
+                                    if (emulator->V[0xF] == 0) emulator->V[0xF] = emulator->display[loc2 + 1] & b;
                                     emulator->display[loc2 + 1] ^= b;
                                 }
                             }
+                            if (!emulator->schip) emulator->draw = true;
                             break;
                     }
             }
-            emulator->draw = true;
             break;
         case 0xE000:
             switch (code & 0x00FF) {
+                // EX9E skip next opcode if key in the lower 4 bits of vX is pressed
                 case 0x009E:
                     if (emulator->key[vx & 0xF] == 1) {
                         emulator->pc += 2;
                     }
                     break;
+                // EXA1 skip next opcode if key in the lower 4 bits of vX is not pressed
                 case 0x00A1:
                     if (emulator->key[vx & 0xF] != 1) {
                         emulator->pc += 2;
@@ -337,6 +423,7 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
             break;
         case 0xF000:
             switch (code & 0x00FF) {
+                // FX33 write the value of vX as BCD value at the addresses I, I+1 and I+2
                 case 0x0033:
                     uint8_t h = vx / 100;
                     uint8_t t = (vx % 100) / 10;
@@ -345,6 +432,8 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                     emulator->memory[emulator->I + 1] = t;
                     emulator->memory[emulator->I + 2] = d;
                     break;
+                // FX55 write the content of v0 to vX at the memory pointed to by I, I is incremented by X+1 
+                // CHIP-48/SCHIP1.0 increment I only by X, SCHIP1.1/SCHIP-MODERN not at all
                 case 0x0055:
                     uint8_t l = (code & 0x0F00) >> 8;
                     switch (emulator->schip) {
@@ -361,6 +450,8 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                             break;
                     }
                     break;
+                // FX65 read the bytes from memory pointed to by I into the registers v0 to vX, I is incremented by X+1 
+                // See above
                 case 0x0065:
                     l = (code & 0x0F00) >> 8;
                     switch (emulator->schip) {
@@ -377,39 +468,46 @@ bool decode_execute(uint16_t code, struct Chip8* emulator, struct SDLPack* SDLPa
                             break;
                     }
                     break;
+                // FX07 set vX to the value of the delay timer
                 case 0x0007:
                     emulator->V[(code & 0x0F00) >> 8] = emulator->delay_timer;
                     break;
+                // FX15 set delay timer to vX
                 case 0x0015:
                     emulator->delay_timer = vx;
                     break;
+                // FX18 set sound timer to vX, sound is played as long as the sound timer reaches zero
                 case 0x0018:
                     emulator->sound_timer = vx;
                     break;
+                // FX0A wait for a key pressed and released and set vX to it
                 case 0x000A:
                     emulator->waiting = true;
                     emulator->wait_register = emulator->opcode;
                     break;
+                // FX1E add vX to I
+                // Common myth that VF has a carry flag here if I overflows. Results in unexpected behaviour
                 case 0x001E:
                     emulator->I += vx;
-                    if (emulator->schip && emulator->I > 0x0FFF) {
-                        emulator->V[0xF] = 1;
-                    } else if (emulator->schip && emulator->I <= 0x0FFF) {
-                        emulator->V[0xF] = 0;
-                    }
                     break;
+                // FX29set I to the 5 line high hex sprite for the lowest nibble in vX
                 case 0x0029:
                     emulator->I = (vx & 0xF) * 5;
                     break;
+                // FX30 set I to the 10 lines high hex sprite for the lowest nibble in vX
                 case 0x0030:                        
                     emulator->I = (vx & 0xF) * 10;
                     break;
+                // FX75 store the content of the registers v0 to vX into flags storage (outside of the addressable ram)
+                // These should be continuous between emulator startups - original hardware was between program startups
+                // Currently not implemented so would be a good addition
                 case 0x0075:
                     u = (((code & 0x0F00) >> 8) > 7) ? 7 : (code & 0x0F00) >> 8;
                     for (int i = 0; i <= u; i++) {
                         emulator->flags[i] = emulator->V[i];
                     }
                     break;
+                // FX85 load the registers v0 to vX from flags storage (outside the addressable ram)
                 case 0x0085:
                     u = (((code & 0x0F00) >> 8) > 7) ? 7 : (code & 0x0F00) >> 8;
                     for (int i = 0; i <= u; i++) {
@@ -448,13 +546,5 @@ int to_key(SDL_KeyCode key) {
         case SDLK_v: return 0xF;
     }
     return -1;
-}
-
-// v1 is value to be checked; v2 is expected value upper limit
-bool is_in_bounds(int v1, int v2) {
-    if (v1 >= v2) {
-        return false;
-    }
-    return true;
 }
 

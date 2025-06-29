@@ -13,6 +13,8 @@ int main(int argc, char* argv[]) {
         printf("mode s = schip, c = chip8");
         return 1;
     }
+
+
     struct SDLPack* SDLPack = malloc(sizeof(struct SDLPack));
     if (!SDLPack) {
         printf("Unable to create SDL environment");
@@ -27,8 +29,11 @@ int main(int argc, char* argv[]) {
     if (strcmp(argv[2], "s") == 0) {
         emulator->schip = true;
         printf("schip on\n");
-    } else {
+    } else if (strcmp(argv[2], "c") == 0) {
         emulator->schip = false;
+    } else {
+        printf("mode s = schip, c = chip8");
+        return 1;
     }
 
     bool SDLsetup = setup(SDLPack);
@@ -73,10 +78,10 @@ int main(int argc, char* argv[]) {
             emulator->delay_timer--;
         }
 
+        // Better to fetch -> increment -> execute. Incrementing inside opcodes is unexpected
         if (!emulator->waiting) {
             for (int i = 0; i < 33; i++) {
                 emulator->draw = false;
-                //printf("opcode is %x\n", emulator->opcode);
                 emulator->opcode = emulator->memory[emulator->pc] << 8 | emulator->memory[emulator->pc + 1];
                 emulator->pc += 2;
                 decode_execute(emulator->opcode, emulator, SDLPack);

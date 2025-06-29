@@ -33,6 +33,12 @@ void update_display(struct Chip8* emulator, struct SDLPack* SDLPack) {
     SDL_RenderPresent(SDLPack->renderer);
 }
 
+void clear_display(uint8_t display[]) {
+    for (int i = 0; i < DISPLAY_SIZE; i++) {
+        display[i] = 0;
+    }
+}
+
 void to_pixels(uint8_t display[], uint32_t buffer[]) {
     SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA8888);
     for (int i = 0; i < DISPLAY_SIZE; i++) {
